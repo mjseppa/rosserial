@@ -52,5 +52,6 @@ int main(int argc, char* argv[])
   boost::asio::io_service io_service;
   rosserial_server::SerialSession serial_session(io_service, port, baud);
   io_service.run();
+
   return 0;
 }
