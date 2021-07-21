@@ -141,6 +141,10 @@ public:
     publishers_.clear();
     service_clients_.clear();
     service_servers_.clear();
+    
+    // Send disconnection message
+    std::vector<uint8_t> message(1);
+    write_message(message, rosserial_msgs::TopicInfo::ID_TX_STOP);
 
     // Close the socket.
     socket_.close();
@@ -507,15 +511,13 @@ private:
     ros::serialization::Serializer<rosserial_msgs::TopicInfo>::read(stream, topic_info);
 
     if (!service_servers_.count(topic_info.topic_name)) {
-      ROS_INFO("Creating service server pub for topic %s",topic_info.topic_name.c_str());
+      ROS_INFO("Creating service server for topic %s",topic_info.topic_name.c_str());
       ServiceServerPtr srv(new ServiceServer(nh_, ros_service_callback_queue_, topic_info, buffer_max, boost::bind(&Session::write_message, this, _1, _2)));
       service_servers_[topic_info.topic_name] = srv;
       callbacks_[topic_info.topic_id] = boost::bind(&ServiceServer::response_handle, srv, _1);
     }
     if (service_servers_[topic_info.topic_name]->getResponseMessageMD5() != topic_info.md5sum) {
-      ROS_WARN("Service server pub setup %s: Request message MD5 mismatch between rosserial server and ROS, %s : %s", topic_info.topic_name.c_str(),
-        service_servers_[topic_info.topic_name]->getResponseMessageMD5().c_str(),
-        topic_info.md5sum.c_str());
+      ROS_WARN("Service server pub setup %s: Srv response MD5 mismatch between rosserial server and ROS", topic_info.topic_name.c_str());
     } else {
       ROS_DEBUG("Service server %s: request message MD5 successfully validated as %s",
                topic_info.topic_name.c_str(),topic_info.md5sum.c_str());
@@ -528,7 +530,7 @@ private:
     ros::serialization::Serializer<rosserial_msgs::TopicInfo>::read(stream, topic_info);
 
     if (!service_servers_.count(topic_info.topic_name)) {
-      ROS_INFO("Creating service server sub for topic %s",topic_info.topic_name.c_str());
+      ROS_INFO("Creating service server for topic %s",topic_info.topic_name.c_str());
       ServiceServerPtr srv(new ServiceServer(nh_, ros_service_callback_queue_, topic_info, buffer_max, boost::bind(&Session::write_message, this, _1, _2)));
       service_servers_[topic_info.topic_name] = srv;
       callbacks_[topic_info.topic_id] = boost::bind(&ServiceServer::response_handle, srv, _1);
@@ -536,9 +538,7 @@ private:
     // see above comment regarding the service server callback for why we set topic_id here
     service_servers_[topic_info.topic_name]->setTopicId(topic_info.topic_id);
     if (service_servers_[topic_info.topic_name]->getRequestMessageMD5() != topic_info.md5sum) {
-      ROS_WARN("Service server sub setup %s: Request message MD5 mismatch between rosserial server and ROS, %s : %s", topic_info.topic_name.c_str(),
-        service_servers_[topic_info.topic_name]->getRequestMessageMD5().c_str(), 
-        topic_info.md5sum.c_str());
+      ROS_WARN("Service server sub setup %s: Srv request MD5 mismatch between rosserial server and ROS", topic_info.topic_name.c_str());
     } else {
       ROS_DEBUG("Service server %s: response message MD5 successfully validated as %s",
                topic_info.topic_name.c_str(),topic_info.md5sum.c_str());

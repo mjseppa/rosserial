@@ -41,6 +41,7 @@
 #include <rosserial_server/msg_lookup.h>
 #include <chrono>
 #include <thread>
+#include <condition_variable>
 
 namespace rosserial_server
 {
@@ -247,7 +248,7 @@ public:
   bool request_handle(topic_tools::ShapeShifter& request_message, topic_tools::ShapeShifter& response_message) {
 
     get_response_ = false;
-    ROS_ERROR_STREAM("service receive " << service_server_.getService() << " request");
+    ROS_DEBUG_STREAM("service receive " << service_server_.getService() << " request");
 
     size_t length = ros::serialization::serializationLength(request_message);
     std::vector<uint8_t> buffer(length);
@@ -257,29 +258,28 @@ public:
     write_fn_(buffer,topic_id_);
 
     //wait for the response
-    ros::Time start_t = ros::Time::now();
-    while(!get_response_)
-      {
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        if (ros::Time::now().toSec() - start_t.toSec() > timeout_)
-          {
-            ROS_WARN_STREAM(service_server_.getService() << ": no response for " << timeout_ << ", give up.");
-            return false;
-          }
-      }
-
-    ros::serialization::IStream response_stream(&response_buffer_[0], buffer_len_);
-    ros::serialization::Serializer<topic_tools::ShapeShifter>::read(response_stream, response_message);
-
-    return true;
+    std::unique_lock<std::mutex> lk(service_mutex_);
+    if(cv_.wait_for(lk, std::chrono::milliseconds((int)(timeout_*1000)), [this]{ return get_response_; }))
+    {
+      ros::serialization::IStream response_stream(&response_buffer_[0], buffer_len_);
+      ros::serialization::Serializer<topic_tools::ShapeShifter>::read(response_stream, response_message);
+      service_mutex_.unlock();
+      return true;
+	}
+    else
+    {
+      ROS_WARN_STREAM(service_server_.getService() << ": no response for " << timeout_ << ", give up.");
+      service_mutex_.unlock();
+      return false;
+    }
   }
 
   void response_handle(ros::serialization::IStream stream) {
     buffer_len_ = stream.getLength();
     std::memcpy(&response_buffer_[0], stream.getData(),stream.getLength());
-    ROS_ERROR_STREAM("service receive " << service_server_.getService() << " response");
+    ROS_DEBUG_STREAM("service receive " << service_server_.getService() << " response");
     get_response_ = true;
+    cv_.notify_one();
   }
 
 private:
@@ -292,6 +292,9 @@ private:
   std::string response_message_md5_;
   uint16_t topic_id_;
   double timeout_;
+  std::condition_variable cv_;
+  std::mutex service_mutex_;
+
 
   bool get_response_;
 };
