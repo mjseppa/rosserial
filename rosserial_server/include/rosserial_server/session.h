@@ -74,7 +74,7 @@ public:
   {
     active_ = false;
 
-    timeout_interval_ = boost::posix_time::milliseconds(5000);
+    timeout_interval_ = boost::posix_time::milliseconds(10000);
     attempt_interval_ = boost::posix_time::milliseconds(1000);
     require_check_interval_ = boost::posix_time::milliseconds(1000);
     ros_spin_interval_ = boost::posix_time::milliseconds(10);
